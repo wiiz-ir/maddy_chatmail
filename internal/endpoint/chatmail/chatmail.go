@@ -453,7 +453,9 @@ func (e *Endpoint) handleCustomAccount(w http.ResponseWriter, r *http.Request) {
 	if testErr == nil {
 		// User was created successfully, so it didn't exist
 		// Delete the test user immediately
-		e.authDB.DeleteUser(email)
+		if delErr := e.authDB.DeleteUser(email); delErr != nil {
+			e.logger.Error("failed to delete test user", delErr, "email", email)
+		}
 	} else if strings.Contains(testErr.Error(), "already exist") || strings.Contains(testErr.Error(), "exists") {
 		http.Error(w, "Username already exists", http.StatusConflict)
 		return

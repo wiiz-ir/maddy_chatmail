@@ -771,12 +771,14 @@ func setupPermissions(config *InstallConfig, dryRun bool) error {
 
 	// Count files for progress indication
 	fileCount := 0
-	filepath.WalkDir(config.StateDir, func(path string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(config.StateDir, func(path string, d fs.DirEntry, err error) error {
 		if err == nil {
 			fileCount++
 		}
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to count files in state directory: %v", err)
+	}
 
 	fmt.Printf("     Processing %d files and directories...\n", fileCount)
 
