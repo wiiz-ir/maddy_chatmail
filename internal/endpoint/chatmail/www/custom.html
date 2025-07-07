@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <title>{{.MailDomain}} custom account</title>
+    <link rel="stylesheet" href="./main.css">
+    <link rel="icon" href="/logo.svg">
+    <link rel="mask-icon" href="/logo.svg" color="#000000">
+</head>
+<body>
+
+<ul id="menu">
+    <li><a href="index.html">home</a></li>
+    <li><a href="info.html">info</a></li>
+    <li><a href="privacy.html">privacy</a></li>
+    {{if .AllowCustom}}<li><a href="custom.html">custom</a></li>{{end}}
+    <li><a href="https://github.com/deltachat/chatmail">public code ↗</a></li>
+    <li id="domain"><a href="index.html">{{.MailDomain}}</a></li>
+</ul>
+
+<h2>Create Custom Account</h2>
+<p>Create a custom account on {{.MailDomain}} with your own username and password.</p>
+
+<form id="customAccountForm">
+    <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required 
+               pattern="[a-zA-Z0-9._-]+" 
+               title="Only letters, numbers, dots, hyphens, and underscores allowed"
+               placeholder="Enter your desired username">
+        <small>Your email will be: <span id="preview">@{{.MailDomain}}</span></small>
+    </div>
+    
+    <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required 
+               minlength="8"
+               placeholder="Enter a secure password (min 8 characters)">
+    </div>
+    
+    <div class="form-group">
+        <label for="confirmPassword">Confirm Password:</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" required 
+               placeholder="Confirm your password">
+    </div>
+    
+    <button type="submit">Create Account</button>
+</form>
+
+<div id="result" style="display: none;">
+    <h3>Account Created Successfully!</h3>
+    <p><strong>Email:</strong> <span id="resultEmail"></span></p>
+    <p><strong>Password:</strong> <span id="resultPassword"></span></p>
+    <p>You can now use these credentials in your Delta Chat app.</p>
+    
+    <div class="action-buttons">
+        <button type="button" id="openDeltaChat" class="primary-button">
+            📱 Open in Delta Chat
+        </button>
+        <button type="button" id="copyLogin" class="secondary-button">
+            📋 Copy Login URL
+        </button>
+        <button type="button" id="showQR" class="secondary-button">
+            📊 Show QR Code
+        </button>
+    </div>
+    
+    <div id="qrCode" style="display: none; margin-top: 1rem; text-align: center;">
+        <h4>Scan with Delta Chat:</h4>
+        <img id="qrImage" src="" alt="QR Code" style="max-width: 200px; border: 1px solid #ccc;">
+    </div>
+</div>
+
+<div id="error" style="display: none; color: red;">
+    <h3>Error</h3>
+    <p id="errorMessage"></p>
+</div>
+
+<style>
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    max-width: 300px;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #666;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.primary-button {
+    background-color: #28a745;
+    font-weight: bold;
+}
+
+.primary-button:hover {
+    background-color: #218838;
+}
+
+.secondary-button {
+    background-color: #6c757d;
+}
+
+.secondary-button:hover {
+    background-color: #545b62;
+}
+
+#preview {
+    font-weight: bold;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('customAccountForm');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+    const preview = document.getElementById('preview');
+    const resultDiv = document.getElementById('result');
+    const errorDiv = document.getElementById('error');
+    
+    // Update email preview as user types
+    usernameInput.addEventListener('input', function() {
+        const username = this.value;
+        preview.textContent = username ? username + '@{{.MailDomain}}' : '@{{.MailDomain}}';
+    });
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+        
+        // Hide previous results
+        resultDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+        
+        // Validate inputs
+        if (!username) {
+            showError('Username is required');
+            return;
+        }
+        
+        if (password !== confirmPassword) {
+            showError('Passwords do not match');
+            return;
+        }
+        
+        if (password.length < 8) {
+            showError('Password must be at least 8 characters long');
+            return;
+        }
+        
+        // Validate username format
+        const usernameRegex = /^[a-zA-Z0-9._-]+$/;
+        if (!usernameRegex.test(username)) {
+            showError('Username can only contain letters, numbers, dots, hyphens, and underscores');
+            return;
+        }
+        
+        // Check username doesn't start/end with special characters
+        if (username.startsWith('.') || username.startsWith('-') || username.startsWith('_') ||
+            username.endsWith('.') || username.endsWith('-') || username.endsWith('_')) {
+            showError('Username cannot start or end with special characters');
+            return;
+        }
+        
+        // Submit to server
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Creating...';
+        
+        fetch('/custom', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(text || 'Server error');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Show success
+            document.getElementById('resultEmail').textContent = data.email;
+            document.getElementById('resultPassword').textContent = data.password;
+            resultDiv.style.display = 'block';
+            form.style.display = 'none';
+            
+            // Set up action buttons
+            setupActionButtons(data.email, data.password);
+        })
+        .catch(error => {
+            showError(error.message);
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Create Account';
+        });
+    });
+    
+    function showError(message) {
+        document.getElementById('errorMessage').textContent = message;
+        errorDiv.style.display = 'block';
+    }
+    
+    function generateDeltaChatURL(email, password) {
+        const mxDomain = '{{.MXDomain}}';
+        return `dclogin://${email}/?p=${encodeURIComponent(password)}&v=1&ih=${mxDomain}&ip=993&sh=${mxDomain}&sp=465&is=default&ss=default`;
+    }
+    
+    function generateQRCodeURL(text) {
+        return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+    }
+    
+    async function copyToClipboard(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            alert('Login URL copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy: ', err);
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                alert('Login URL copied to clipboard!');
+            } catch (err) {
+                alert('Failed to copy URL. Please copy manually: ' + text);
+            }
+            document.body.removeChild(textArea);
+        }
+    }
+    
+    function setupActionButtons(email, password) {
+        const openDeltaChatBtn = document.getElementById('openDeltaChat');
+        const copyLoginBtn = document.getElementById('copyLogin');
+        const showQRBtn = document.getElementById('showQR');
+        const qrCodeDiv = document.getElementById('qrCode');
+        const qrImage = document.getElementById('qrImage');
+        
+        const loginURL = generateDeltaChatURL(email, password);
+        
+        openDeltaChatBtn.addEventListener('click', function() {
+            window.location.href = loginURL;
+        });
+        
+        copyLoginBtn.addEventListener('click', function() {
+            copyToClipboard(loginURL);
+        });
+        
+        showQRBtn.addEventListener('click', function() {
+            if (qrCodeDiv.style.display === 'none') {
+                qrImage.src = generateQRCodeURL(loginURL);
+                qrCodeDiv.style.display = 'block';
+                showQRBtn.textContent = '🙈 Hide QR Code';
+            } else {
+                qrCodeDiv.style.display = 'none';
+                showQRBtn.textContent = '📊 Show QR Code';
+            }
+        });
+    }
+});
+</script>
+
+</body>
+</html>
