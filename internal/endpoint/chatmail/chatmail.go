@@ -412,7 +412,10 @@ func (e *Endpoint) handleStaticFiles(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// For non-HTML files, serve them as-is
 		w.Header().Set("Content-Type", contentType)
-		w.Write(fileData)
+		if _, err := w.Write(fileData); err != nil {
+			e.logger.Error("failed to write file data", err, "file", path)
+			return
+		}
 	}
 }
 
@@ -460,7 +463,9 @@ func (e *Endpoint) handleCustomAccount(w http.ResponseWriter, r *http.Request) {
 	testIMAPErr := e.storage.CreateIMAPAcct(email)
 	if testIMAPErr == nil {
 		// Account was created, so it didn't exist - delete it immediately
-		e.storage.DeleteIMAPAcct(email)
+		if delErr := e.storage.DeleteIMAPAcct(email); delErr != nil {
+			e.logger.Error("failed to delete test IMAP account", delErr, "email", email)
+		}
 	} else if strings.Contains(testIMAPErr.Error(), "already exist") || strings.Contains(testIMAPErr.Error(), "exists") {
 		http.Error(w, "Username already exists", http.StatusConflict)
 		return
