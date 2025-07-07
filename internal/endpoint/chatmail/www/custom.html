@@ -16,12 +16,24 @@
     <li><a href="info.html">info</a></li>
     <li><a href="privacy.html">privacy</a></li>
     {{if .AllowCustom}}<li><a href="custom.html">custom</a></li>{{end}}
+    <li><a href="password-change.html">password</a></li>
+    <li><a href="account-deletion.html">delete account</a></li>
     <li><a href="https://github.com/deltachat/chatmail">public code ↗</a></li>
     <li id="domain"><a href="index.html">{{.MailDomain}}</a></li>
 </ul>
 
 <h2>Create Custom Account</h2>
 <p>Create a custom account on {{.MailDomain}} with your own username and password.</p>
+
+<div class="info-box">
+    <h3>💡 Important Information:</h3>
+    <ul>
+        <li><strong>Save your password safely</strong> - you'll need it for account deletion</li>
+        <li><strong>For multiple devices:</strong> Use the "Add Second Device" button in Delta Chat instead of manually adding the account</li>
+        <li>This ensures proper encryption key synchronization between your devices</li>
+        <li>Manual login on multiple devices will prevent secure key migration</li>
+    </ul>
+</div>
 
 <form id="customAccountForm">
     <div class="form-group">
@@ -35,9 +47,14 @@
     
     <div class="form-group">
         <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required 
-               minlength="8"
-               placeholder="Enter a secure password (min 8 characters)">
+        <div class="password-input-group">
+            <input type="password" id="password" name="password" required 
+                   minlength="8"
+                   placeholder="Enter a secure password (min 8 characters)">
+            <button type="button" id="generatePassword" class="secondary-button">Generate Random</button>
+        </div>
+        <div class="password-strength" id="passwordStrength"></div>
+        <small>A strong password is recommended. Use the generate button for a secure random password.</small>
     </div>
     
     <div class="form-group">
@@ -79,6 +96,27 @@
 </div>
 
 <style>
+.info-box {
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+.info-box h3 {
+    margin-top: 0;
+    color: #0c5460;
+}
+
+.info-box ul {
+    margin-bottom: 0;
+}
+
+.info-box li {
+    margin-bottom: 0.5rem;
+}
+
 .form-group {
     margin-bottom: 1rem;
 }
@@ -102,6 +140,34 @@
     display: block;
     margin-top: 0.25rem;
     color: #666;
+}
+
+.password-input-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.password-input-group input {
+    flex: 1;
+}
+
+.password-strength {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.password-strength.weak {
+    color: #dc3545;
+}
+
+.password-strength.medium {
+    color: #ffc107;
+}
+
+.password-strength.strong {
+    color: #28a745;
 }
 
 button {
@@ -132,6 +198,12 @@ button:disabled {
 
 .primary-button {
     background-color: #28a745;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
     font-weight: bold;
 }
 
@@ -141,6 +213,12 @@ button:disabled {
 
 .secondary-button {
     background-color: #6c757d;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
 }
 
 .secondary-button:hover {
@@ -158,6 +236,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
     const confirmPasswordInput = document.getElementById('confirmPassword');
+    const generatePasswordBtn = document.getElementById('generatePassword');
+    const passwordStrength = document.getElementById('passwordStrength');
     const preview = document.getElementById('preview');
     const resultDiv = document.getElementById('result');
     const errorDiv = document.getElementById('error');
@@ -166,6 +246,27 @@ document.addEventListener('DOMContentLoaded', function() {
     usernameInput.addEventListener('input', function() {
         const username = this.value;
         preview.textContent = username ? username + '@{{.MailDomain}}' : '@{{.MailDomain}}';
+    });
+    
+    // Password strength checker
+    passwordInput.addEventListener('input', function() {
+        checkPasswordStrength(this.value);
+        if (confirmPasswordInput.value) {
+            checkPasswordMatch();
+        }
+    });
+    
+    confirmPasswordInput.addEventListener('input', function() {
+        checkPasswordMatch();
+    });
+    
+    // Generate random password
+    generatePasswordBtn.addEventListener('click', function() {
+        const randomPassword = generateRandomPassword(16);
+        passwordInput.value = randomPassword;
+        confirmPasswordInput.value = randomPassword;
+        checkPasswordStrength(randomPassword);
+        checkPasswordMatch();
     });
     
     // Form submission
@@ -257,13 +358,61 @@ document.addEventListener('DOMContentLoaded', function() {
         errorDiv.style.display = 'block';
     }
     
+    function checkPasswordStrength(password) {
+        if (password.length === 0) {
+            passwordStrength.textContent = '';
+            passwordStrength.className = 'password-strength';
+            return;
+        }
+        
+        let strength = 0;
+        if (password.length >= 8) strength++;
+        if (password.length >= 12) strength++;
+        if (/[A-Z]/.test(password)) strength++;
+        if (/[a-z]/.test(password)) strength++;
+        if (/[0-9]/.test(password)) strength++;
+        if (/[^A-Za-z0-9]/.test(password)) strength++;
+        
+        if (strength <= 2) {
+            passwordStrength.textContent = 'Weak';
+            passwordStrength.className = 'password-strength weak';
+        } else if (strength <= 4) {
+            passwordStrength.textContent = 'Medium';
+            passwordStrength.className = 'password-strength medium';
+        } else {
+            passwordStrength.textContent = 'Strong';
+            passwordStrength.className = 'password-strength strong';
+        }
+    }
+    
+    function checkPasswordMatch() {
+        const password = passwordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+        
+        if (confirmPassword && password !== confirmPassword) {
+            confirmPasswordInput.setCustomValidity('Passwords do not match');
+        } else {
+            confirmPasswordInput.setCustomValidity('');
+        }
+    }
+    
+    function generateRandomPassword(length) {
+        const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+        let password = "";
+        for (let i = 0; i < length; i++) {
+            password += charset.charAt(Math.floor(Math.random() * charset.length));
+        }
+        return password;
+    }
+    
     function generateDeltaChatURL(email, password) {
         const mxDomain = '{{.MXDomain}}';
         return `dclogin://${email}/?p=${encodeURIComponent(password)}&v=1&ih=${mxDomain}&ip=993&sh=${mxDomain}&sp=465&is=default&ss=default`;
     }
     
     function generateQRCodeURL(text) {
-        return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+        // Use internal QR code generation instead of external service
+        return `/qr?data=${encodeURIComponent(text)}`;
     }
     
     async function copyToClipboard(text) {

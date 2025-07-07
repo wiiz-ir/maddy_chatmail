@@ -37,6 +37,7 @@ import (
 	"github.com/foxcpp/maddy/framework/log"
 	"github.com/foxcpp/maddy/framework/module"
 	"github.com/foxcpp/maddy/internal/auth/pass_table"
+	"github.com/skip2/go-qrcode"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -80,6 +81,18 @@ type AccountResponse struct {
 type CustomAccountRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type PasswordChangeRequest struct {
+	Email           string `json:"email"`
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type AccountDeletionRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Confirm  string `json:"confirm"`
 }
 
 func New(_ string, args []string) (module.Module, error) {
@@ -157,6 +170,9 @@ func (e *Endpoint) Init(cfg *config.Map) error {
 	if e.allowCustom {
 		e.mux.HandleFunc("/custom", e.handleCustomAccount)
 	}
+	e.mux.HandleFunc("/password-change", e.handlePasswordChange)
+	e.mux.HandleFunc("/account-deletion", e.handleAccountDeletion)
+	e.mux.HandleFunc("/qr", e.handleQRCode)
 	// Priority 2: Static files and templates
 	e.mux.HandleFunc("/", e.handleStaticFiles)
 	e.serv.Handler = e.mux
@@ -517,6 +533,155 @@ func (e *Endpoint) validateUsername(username string) error {
 	}
 
 	return nil
+}
+
+func (e *Endpoint) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse JSON request
+	var req PasswordChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate input
+	if req.Email == "" || req.CurrentPassword == "" || req.NewPassword == "" {
+		http.Error(w, "All fields are required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate new password length
+	if len(req.NewPassword) < 8 {
+		http.Error(w, "New password must be at least 8 characters long", http.StatusBadRequest)
+		return
+	}
+
+	// Verify current password
+	err := e.authDB.AuthPlain(req.Email, req.CurrentPassword)
+	if err != nil {
+		e.logger.Error("password verification failed", err, "email", req.Email)
+		http.Error(w, "Invalid current password", http.StatusUnauthorized)
+		return
+	}
+
+	// Update password in authentication database
+	err = e.authDB.SetUserPassword(req.Email, req.NewPassword)
+
+	if err != nil {
+		e.logger.Error("failed to update password", err, "email", req.Email)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]string{"status": "success", "message": "Password changed successfully"}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		e.logger.Error("failed to encode response", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	e.logger.Printf("password changed for account: %s", req.Email)
+}
+
+func (e *Endpoint) handleAccountDeletion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse JSON request
+	var req AccountDeletionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate input
+	if req.Email == "" || req.Password == "" || req.Confirm == "" {
+		http.Error(w, "All fields are required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify confirmation
+	if req.Confirm != "DELETE" {
+		http.Error(w, "Please type 'DELETE' to confirm", http.StatusBadRequest)
+		return
+	}
+
+	// Verify password
+	err := e.authDB.AuthPlain(req.Email, req.Password)
+	if err != nil {
+		e.logger.Error("password verification failed for deletion", err, "email", req.Email)
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
+	}
+
+	// Delete IMAP account and all associated data from storage
+	err = e.storage.DeleteIMAPAcct(req.Email)
+	if err != nil {
+		e.logger.Error("failed to delete IMAP account", err, "email", req.Email)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Delete user from authentication database
+	err = e.authDB.DeleteUser(req.Email)
+	if err != nil {
+		e.logger.Error("failed to delete user from auth DB", err, "email", req.Email)
+		// Storage is already deleted, log warning but continue
+		e.logger.Printf("warning: user %s removed from storage but auth DB deletion failed", req.Email)
+	}
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]string{"status": "success", "message": "Account deleted successfully"}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		e.logger.Error("failed to encode response", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	e.logger.Printf("deleted account: %s", req.Email)
+}
+
+func (e *Endpoint) handleQRCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get the data parameter from query string
+	data := r.URL.Query().Get("data")
+	if data == "" {
+		http.Error(w, "Missing 'data' parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Generate QR code
+	qrCode, err := qrcode.Encode(data, qrcode.Medium, 256)
+	if err != nil {
+		e.logger.Error("failed to generate QR code", err, "data", data)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers for PNG image
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	// Write the QR code image
+	if _, err := w.Write(qrCode); err != nil {
+		e.logger.Error("failed to write QR code response", err)
+		return
+	}
 }
 
 func init() {
