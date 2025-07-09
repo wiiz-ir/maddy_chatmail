@@ -15,9 +15,6 @@
     <li><a href="index.html">home</a></li>
     <li><a href="info.html">info</a></li>
     <li><a href="privacy.html">privacy</a></li>
-    {{if .AllowCustom}}<li><a href="custom.html">custom</a></li>{{end}}
-    <li><a href="password-change.html">password</a></li>
-    <li><a href="account-deletion.html">delete account</a></li>
     <li><a href="https://github.com/deltachat/chatmail">public code ↗</a></li>
     <li id="domain"><a href="index.html">{{.MailDomain}}</a></li>
 </ul>
@@ -28,83 +25,18 @@
 Welcome to instant, interoperable and <a href="privacy.html">privacy-preserving</a> messaging :) 
 </p>
 <p><a class="cta-button" href="DCACCOUNT:https://{{.WebDomain}}/new">Get a {{.MailDomain}} chat profile</a></p>
-<p>Or <button id="createRandomAccount" class="cta-button">Create Random Account</button></p>
 <p>If you are viewing this page on a different device
 without a Delta Chat app,
 you can also <strong>scan this QR code</strong> with Delta Chat:</p>
 <p><a href="DCACCOUNT:https://{{.WebDomain}}/new">
-    <img width=300 style="float: none;" src="qr-chatmail-invite-{{.MailDomain}}.png" /></a></p>
+    <img width=300 style="float: none;" src="/qr?data=DCACCOUNT%3Ahttps%3A//{{.WebDomain}}/new" /></a></p>
 <p>🐣 <strong>Choose</strong> your Avatar and Name</p>
 <p>💬 <strong>Start</strong> chatting with any Delta Chat contacts using <a href="https://delta.chat/en/help#howtoe2ee">QR invite codes</a></p>
 <p></p>
 <div class="experimental">Note: this is only a temporary development chatmail service</div>
 <p></p>
 
-<div id="randomResult" style="display: none;">
-    <h3>Account Created Successfully!</h3>
-    <p><strong>Email:</strong> <span id="randomResultEmail"></span></p>
-    <p><strong>Password:</strong> <span id="randomResultPassword"></span></p>
-    
-    <div class="action-buttons">
-        <button type="button" id="openRandomDeltaChat" class="primary-button">
-            📱 Open in Delta Chat
-        </button>
-        <button type="button" id="copyRandomLogin" class="secondary-button">
-            📋 Copy Login URL
-        </button>
-        <button type="button" id="showRandomQR" class="secondary-button">
-            📊 Show QR Code
-        </button>
-    </div>
-    
-    <div id="randomQrCode" style="display: none; margin-top: 1rem; text-align: center;">
-        <h4>Scan with Delta Chat:</h4>
-        <img id="randomQrImage" src="" alt="QR Code" style="max-width: 200px; border: 1px solid #ccc;">
-    </div>
-</div>
-
-<div id="randomError" style="display: none; color: red;">
-    <h3>Error</h3>
-    <p id="randomErrorMessage"></p>
-</div>
-
 <style>
-.action-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-top: 1rem;
-}
-
-.primary-button {
-    background-color: #28a745;
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 4px;
-    font-size: 1rem;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-.primary-button:hover {
-    background-color: #218838;
-}
-
-.secondary-button {
-    background-color: #6c757d;
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 4px;
-    font-size: 1rem;
-    cursor: pointer;
-}
-
-.secondary-button:hover {
-    background-color: #545b62;
-}
-
 .cta-button {
     display: inline-block;
     background-color: #007bff;
@@ -121,123 +53,5 @@ you can also <strong>scan this QR code</strong> with Delta Chat:</p>
     background-color: #0056b3;
 }
 </style>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const createRandomBtn = document.getElementById('createRandomAccount');
-    const randomResultDiv = document.getElementById('randomResult');
-    const randomErrorDiv = document.getElementById('randomError');
-    
-    createRandomBtn.addEventListener('click', function() {
-        createRandomAccount();
-    });
-    
-    async function createRandomAccount() {
-        createRandomBtn.disabled = true;
-        createRandomBtn.textContent = 'Creating...';
-        
-        // Hide previous results
-        randomResultDiv.style.display = 'none';
-        randomErrorDiv.style.display = 'none';
-        
-        try {
-            const response = await fetch('/new', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-            
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(text || 'Server error');
-            }
-            
-            const data = await response.json();
-            
-            // Show success
-            document.getElementById('randomResultEmail').textContent = data.email;
-            document.getElementById('randomResultPassword').textContent = data.password;
-            randomResultDiv.style.display = 'block';
-            
-            // Set up action buttons
-            setupRandomActionButtons(data.email, data.password);
-            
-        } catch (error) {
-            showRandomError(error.message);
-        } finally {
-            createRandomBtn.disabled = false;
-            createRandomBtn.textContent = 'Create Random Account';
-        }
-    }
-    
-    function showRandomError(message) {
-        document.getElementById('randomErrorMessage').textContent = message;
-        randomErrorDiv.style.display = 'block';
-    }
-    
-    function generateDeltaChatURL(email, password) {
-        const mxDomain = '{{.MXDomain}}';
-        return `dclogin://${email}/?p=${encodeURIComponent(password)}&v=1&ih=${mxDomain}&ip=993&sh=${mxDomain}&sp=465&is=default&ss=default`;
-    }
-    
-    function generateQRCodeURL(text) {
-        // Use internal QR code generation instead of external service
-        return `/qr?data=${encodeURIComponent(text)}`;
-    }
-    
-    async function copyToClipboard(text) {
-        try {
-            await navigator.clipboard.writeText(text);
-            alert('Login URL copied to clipboard!');
-        } catch (err) {
-            console.error('Failed to copy: ', err);
-            // Fallback for older browsers
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                alert('Login URL copied to clipboard!');
-            } catch (err) {
-                alert('Failed to copy URL. Please copy manually: ' + text);
-            }
-            document.body.removeChild(textArea);
-        }
-    }
-    
-    function setupRandomActionButtons(email, password) {
-        const openDeltaChatBtn = document.getElementById('openRandomDeltaChat');
-        const copyLoginBtn = document.getElementById('copyRandomLogin');
-        const showQRBtn = document.getElementById('showRandomQR');
-        const qrCodeDiv = document.getElementById('randomQrCode');
-        const qrImage = document.getElementById('randomQrImage');
-        
-        const loginURL = generateDeltaChatURL(email, password);
-        
-        openDeltaChatBtn.addEventListener('click', function() {
-            window.location.href = loginURL;
-        });
-        
-        copyLoginBtn.addEventListener('click', function() {
-            copyToClipboard(loginURL);
-        });
-        
-        showQRBtn.addEventListener('click', function() {
-            if (qrCodeDiv.style.display === 'none') {
-                qrImage.src = generateQRCodeURL(loginURL);
-                qrCodeDiv.style.display = 'block';
-                showQRBtn.textContent = '🙈 Hide QR Code';
-            } else {
-                qrCodeDiv.style.display = 'none';
-                showQRBtn.textContent = '📊 Show QR Code';
-            }
-        });
-    }
-});
-</script>
-
 </body>
 </html>

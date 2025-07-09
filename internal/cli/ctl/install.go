@@ -80,9 +80,6 @@ type InstallConfig struct {
 	ChatmailHTTPSPort   string
 	ChatmailUsernameLen int
 	ChatmailPasswordLen int
-	ChatmailAllowCustom bool
-	ChatmailMinUsername int
-	ChatmailMaxUsername int
 
 	// DNS configuration (for template)
 	A             string
@@ -122,9 +119,6 @@ func defaultConfig() *InstallConfig {
 		ChatmailHTTPSPort:   "443",
 		ChatmailUsernameLen: 8,
 		ChatmailPasswordLen: 16,
-		ChatmailAllowCustom: true,
-		ChatmailMinUsername: 3,
-		ChatmailMaxUsername: 20,
 		UseCloudflare:       true, // Default to adding Cloudflare proxy disable tags
 		MaddyUser:           "maddy",
 		MaddyGroup:          "maddy",
@@ -409,12 +403,6 @@ func runInteractiveConfig(config *InstallConfig) error {
 		config.ChatmailHTTPSPort = promptString("Chatmail HTTPS port", config.ChatmailHTTPSPort)
 		config.ChatmailUsernameLen = promptInt("Chatmail username length", config.ChatmailUsernameLen)
 		config.ChatmailPasswordLen = promptInt("Chatmail password length", config.ChatmailPasswordLen)
-		config.ChatmailAllowCustom = clitools2.Confirmation("Allow custom usernames/passwords", config.ChatmailAllowCustom)
-
-		if config.ChatmailAllowCustom {
-			config.ChatmailMinUsername = promptInt("Minimum username length", config.ChatmailMinUsername)
-			config.ChatmailMaxUsername = promptInt("Maximum username length", config.ChatmailMaxUsername)
-		}
 	}
 
 	// DNS Provider Configuration
@@ -1462,12 +1450,7 @@ func printInstallationSummary(config *InstallConfig) {
 		fmt.Printf("   - Automatic user registration enabled\n")
 		fmt.Printf("   - Username length: %d characters\n", config.ChatmailUsernameLen)
 		fmt.Printf("   - Password length: %d characters\n", config.ChatmailPasswordLen)
-		if config.ChatmailAllowCustom {
-			fmt.Printf("   - Custom usernames allowed (%d-%d characters)\n",
-				config.ChatmailMinUsername, config.ChatmailMaxUsername)
-		} else {
-			fmt.Printf("   - Only auto-generated usernames allowed\n")
-		}
+		fmt.Printf("   - Only auto-generated usernames allowed\n")
 	}
 }
 

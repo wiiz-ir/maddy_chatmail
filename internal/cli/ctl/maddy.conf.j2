@@ -198,10 +198,6 @@ chatmail tcp://0.0.0.0:{{.ChatmailHTTPPort}} {
     username_length {{.ChatmailUsernameLen}}
     # Optional: customize password length (default: 16)
     password_length {{.ChatmailPasswordLen}}
-    # Optional: enable custom username/password endpoint
-    allow_custom {{.ChatmailAllowCustom}}
-    {{if .ChatmailAllowCustom}}min_username_length {{.ChatmailMinUsername}}
-    max_username_length {{.ChatmailMaxUsername}}{{end}}
 }
 
 # HTTPS endpoint (port {{.ChatmailHTTPSPort}}) - uncomment to enable
@@ -216,10 +212,6 @@ chatmail tls://0.0.0.0:{{.ChatmailHTTPSPort}} {
     username_length {{.ChatmailUsernameLen}}
     # Optional: customize password length (default: 16)  
     password_length {{.ChatmailPasswordLen}}
-    # Optional: enable custom username/password endpoint
-    allow_custom {{.ChatmailAllowCustom}}
-    {{if .ChatmailAllowCustom}}min_username_length {{.ChatmailMinUsername}}
-    max_username_length {{.ChatmailMaxUsername}}{{end}}
     tls file {{.TLSCertPath}} {{.TLSKeyPath}}
 }
 {{end}}
