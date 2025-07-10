@@ -123,6 +123,18 @@ submission tls://0.0.0.0:{{.SubmissionTLS}} tcp://0.0.0.0:{{.SubmissionPort}} {
                 prepare_email &local_rewrites
                 user_to_email identity
             }
+{{if .RequirePGPEncryption}}
+            pgp_encryption {
+                require_encryption {{.RequirePGPEncryption}}
+                allow_secure_join {{.AllowSecureJoin}}
+                {{if .PGPPassthroughSenders}}
+                passthrough_senders {{range .PGPPassthroughSenders}}{{.}} {{end}}
+                {{end}}
+                {{if .PGPPassthroughRecipients}}
+                passthrough_recipients {{range .PGPPassthroughRecipients}}{{.}} {{end}}
+                {{end}}
+            }
+{{end}}
         }
 
         destination postmaster $(local_domains) {

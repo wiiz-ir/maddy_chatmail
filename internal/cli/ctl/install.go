@@ -81,6 +81,12 @@ type InstallConfig struct {
 	ChatmailUsernameLen int
 	ChatmailPasswordLen int
 
+	// PGP Encryption configuration
+	RequirePGPEncryption     bool
+	AllowSecureJoin          bool
+	PGPPassthroughSenders    []string
+	PGPPassthroughRecipients []string
+
 	// DNS configuration (for template)
 	A             string
 	AAAA          string
@@ -102,31 +108,35 @@ type InstallConfig struct {
 // Default configuration values
 func defaultConfig() *InstallConfig {
 	return &InstallConfig{
-		Hostname:            "example.org",
-		PrimaryDomain:       "example.org",
-		LocalDomains:        "$(primary_domain)",
-		StateDir:            "/var/lib/maddy",
-		Generated:           time.Now().Format("2006-01-02 15:04:05"),
-		TLSCertPath:         "/etc/maddy/certs/fullchain.pem",
-		TLSKeyPath:          "/etc/maddy/certs/privkey.pem",
-		SMTPPort:            "25",
-		SubmissionPort:      "587",
-		SubmissionTLS:       "465",
-		IMAPPort:            "143",
-		IMAPTLS:             "993",
-		EnableChatmail:      false,
-		ChatmailHTTPPort:    "80",
-		ChatmailHTTPSPort:   "443",
-		ChatmailUsernameLen: 8,
-		ChatmailPasswordLen: 16,
-		UseCloudflare:       true, // Default to adding Cloudflare proxy disable tags
-		MaddyUser:           "maddy",
-		MaddyGroup:          "maddy",
-		ConfigDir:           "/etc/maddy",
-		SystemdPath:         "/etc/systemd/system",
-		BinaryPath:          "/usr/local/bin/maddy",
-		LibexecDir:          "/var/lib/maddy",
-		LogFile:             "/var/log/maddy-install.log",
+		Hostname:                 "example.org",
+		PrimaryDomain:            "example.org",
+		LocalDomains:             "$(primary_domain)",
+		StateDir:                 "/var/lib/maddy",
+		Generated:                time.Now().Format("2006-01-02 15:04:05"),
+		TLSCertPath:              "/etc/maddy/certs/fullchain.pem",
+		TLSKeyPath:               "/etc/maddy/certs/privkey.pem",
+		SMTPPort:                 "25",
+		SubmissionPort:           "587",
+		SubmissionTLS:            "465",
+		IMAPPort:                 "143",
+		IMAPTLS:                  "993",
+		EnableChatmail:           false,
+		ChatmailHTTPPort:         "80",
+		ChatmailHTTPSPort:        "443",
+		ChatmailUsernameLen:      8,
+		ChatmailPasswordLen:      16,
+		RequirePGPEncryption:     false,
+		AllowSecureJoin:          true,
+		PGPPassthroughSenders:    []string{},
+		PGPPassthroughRecipients: []string{},
+		UseCloudflare:            true, // Default to adding Cloudflare proxy disable tags
+		MaddyUser:                "maddy",
+		MaddyGroup:               "maddy",
+		ConfigDir:                "/etc/maddy",
+		SystemdPath:              "/etc/systemd/system",
+		BinaryPath:               "/usr/local/bin/maddy",
+		LibexecDir:               "/var/lib/maddy",
+		LogFile:                  "/var/log/maddy-install.log",
 	}
 }
 
@@ -192,6 +202,23 @@ Examples:
 				&cli.BoolFlag{
 					Name:  "enable-chatmail",
 					Usage: "Enable chatmail endpoint for user registration",
+				},
+				&cli.BoolFlag{
+					Name:  "require-pgp-encryption",
+					Usage: "Require PGP encryption for outgoing messages",
+				},
+				&cli.BoolFlag{
+					Name:  "allow-secure-join",
+					Usage: "Allow secure join requests even without encryption",
+					Value: true,
+				},
+				&cli.StringSliceFlag{
+					Name:  "pgp-passthrough-senders",
+					Usage: "Sender addresses that bypass PGP encryption requirements",
+				},
+				&cli.StringSliceFlag{
+					Name:  "pgp-passthrough-recipients",
+					Usage: "Recipient addresses that bypass PGP encryption requirements",
 				},
 				&cli.StringFlag{
 					Name:  "log-file",
@@ -262,6 +289,18 @@ func installCommand(ctx *cli.Context) error {
 	}
 	if ctx.IsSet("enable-chatmail") {
 		config.EnableChatmail = ctx.Bool("enable-chatmail")
+	}
+	if ctx.IsSet("require-pgp-encryption") {
+		config.RequirePGPEncryption = ctx.Bool("require-pgp-encryption")
+	}
+	if ctx.IsSet("allow-secure-join") {
+		config.AllowSecureJoin = ctx.Bool("allow-secure-join")
+	}
+	if ctx.IsSet("pgp-passthrough-senders") {
+		config.PGPPassthroughSenders = ctx.StringSlice("pgp-passthrough-senders")
+	}
+	if ctx.IsSet("pgp-passthrough-recipients") {
+		config.PGPPassthroughRecipients = ctx.StringSlice("pgp-passthrough-recipients")
 	}
 	if ctx.IsSet("log-file") {
 		config.LogFile = ctx.String("log-file")
@@ -403,6 +442,24 @@ func runInteractiveConfig(config *InstallConfig) error {
 		config.ChatmailHTTPSPort = promptString("Chatmail HTTPS port", config.ChatmailHTTPSPort)
 		config.ChatmailUsernameLen = promptInt("Chatmail username length", config.ChatmailUsernameLen)
 		config.ChatmailPasswordLen = promptInt("Chatmail password length", config.ChatmailPasswordLen)
+	}
+
+	// PGP Encryption configuration
+	fmt.Println("\n🔐 PGP Encryption Configuration")
+	config.RequirePGPEncryption = clitools2.Confirmation("Require PGP encryption for outgoing messages", config.RequirePGPEncryption)
+
+	if config.RequirePGPEncryption {
+		config.AllowSecureJoin = clitools2.Confirmation("Allow secure join requests without encryption", config.AllowSecureJoin)
+
+		passthroughSenders := promptString("Passthrough senders (comma-separated email addresses that bypass encryption)", "")
+		if passthroughSenders != "" {
+			config.PGPPassthroughSenders = strings.Split(strings.ReplaceAll(passthroughSenders, " ", ""), ",")
+		}
+
+		passthroughRecipients := promptString("Passthrough recipients (comma-separated email addresses that bypass encryption)", "")
+		if passthroughRecipients != "" {
+			config.PGPPassthroughRecipients = strings.Split(strings.ReplaceAll(passthroughRecipients, " ", ""), ",")
+		}
 	}
 
 	// DNS Provider Configuration
